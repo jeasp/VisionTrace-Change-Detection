@@ -1,0 +1,44 @@
+name: Publish portfolio
+run-name: Publish portfolio
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    if: github.repository == 'jeasp/VisionTrace-Change-Detection' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: main
+
+      - name: Publish the current files as one commit
+        shell: bash
+        env:
+          PROJECT_TITLE: 'VisionTrace 프로젝트'
+          GIT_AUTHOR_NAME: Park Jisu
+          GIT_AUTHOR_EMAIL: 161194943+jeasp@users.noreply.github.com
+          GIT_COMMITTER_NAME: Park Jisu
+          GIT_COMMITTER_EMAIL: 161194943+jeasp@users.noreply.github.com
+        run: |
+          set -euo pipefail
+          current=$(git rev-parse HEAD)
+          parents=$(git cat-file -p "$current" | sed -n '1,/^$/ { /^parent /p; }')
+          if [[ -z "$parents" && "$(git log -1 --format=%B)" == "$PROJECT_TITLE" ]]; then
+            exit 0
+          fi
+
+          tree=$(git rev-parse 'HEAD^{tree}')
+          snapshot=$(git commit-tree "$tree" -m "$PROJECT_TITLE")
+          if ! git push --force-with-lease="refs/heads/main:$current" origin "$snapshot:refs/heads/main"; then
+            # A newer push runs its own publishing job.
+            remote=$(git ls-remote --exit-code origin refs/heads/main | cut -f1)
+            [[ "$remote" != "$current" ]]
+          fi
